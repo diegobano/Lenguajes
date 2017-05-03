@@ -54,27 +54,36 @@
   (match expr
     [(num n) (TNum)]
     [(id x) (TNum)]
-    [(add l r) (if (not (= TNum (typeof l)))
-                   (error "Type error in expression + position 1: expected TNum found ~s~n" (typeof l))
-                   (if (not (= TNum (typeof r)))
-                       (error "Type error in expression add position 2: expected TNum found ~s~n" (typeof r))
+    [(add l r) (if (not (equal? (TNum) (typeof l)))
+                   (error (string-append "Type error in expression + position 1: expected Num found " (parse-msg (typeof l))))
+                   (if (not (equal? (TNum) (typeof r)))
+                       (error (string-append "Type error in expression + position 2: expected Num found " (parse-msg (typeof r))))
                        (TNum)))]
     [(fun id targ body tbody) (if (not tbody)
                                   (TFun (TNum) (typeof body))
                                   (let ((etype (typeof body)))
-                                    (match etype
-                                      [(tbody) (TFun (TNum) (TNum))]
-                                      [else (error "Type error in expression fun position 1: expected ~s found ~a~n" tbody etype)])))]
+                                    (if (equal? tbody etype)
+                                        (TFun (TNum) (TNum))
+                                        (let ((emsg1 (parse-msg etype)) (emsg2 (parse-msg tbody)))
+                                          (error (string-append "Type error in expression fun position 1: expected " emsg2 " found " emsg1))))))]
                                   
     [(app fun-id arg-expr) (let ((fun-types (typeof fun-id)))
-                             (if (not (= (first fun-types) TFun))
-                                 (error "Type error in expression app position 1: expected TFun found ~s~n" (first fun-types))
+                             (if (equal? fun-types TNum)
+                                 (let ((emsg (parse-msg fun-types)))
+                                   (error (string-append "Type error in expression app position 1: expected {Num -> Num} found " emsg)))
                                  (let ((targ (typeof arg-expr)))
-                                   (if (not (= (second fun-types) targ))
-                                       (error "Type error in expression app position 2: expected ~a found ~s~n" (second fun-types) targ)
-                                       (third fun-types)))))]))
+                                   (if (not (equal? (TFun-arg fun-types) targ))
+                                       (let ((emsg1 (parse-msg (TFun-arg fun-types))) (emsg2 (parse-msg targ)))
+                                          (error (string-append "Type error in expression app position 2: expected " emsg1 " found " emsg2)))
+                                       (TFun-ret fun-types)))))]))
 
 
-(define (typecheck s-expr) #f)
+(define (typecheck s-expr)
+  (string->symbol (parse-msg (typeof (parse s-expr)))))
+
+(define (parse-msg type)
+  (match type
+    [(TNum) (symbol->string 'Num)]
+    [(TFun arg ret) (string-append "{" (parse-msg arg) " -> " (parse-msg ret) "}")]))
 
 (define (typed-compile s-expr) #f)
