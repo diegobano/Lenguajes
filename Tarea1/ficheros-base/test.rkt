@@ -39,11 +39,28 @@
       (app (fun-db (app (fun-db (add (acc 0) (acc 1))) (add (acc 0) (num 1)))) (num 5)))
 (test/exn (deBruijn (parse 'x)) "Free identifier: x")
 
-;;compile
+(test (deBruijn (parse '{with {x : Num
+                             {{fun {y : Num} {+ y y}} 3}}
+                          {with {z : Num 3}
+                                {+ x z}}}))
+      (app
+       (fun-db (app (fun-db (add (acc 1) (acc 0))) (num 3)))
+       (app (fun-db (add (acc 0) (acc 0))) (num 3))))
+
+;; compile
 (test (compile (add (num 2) (num 1))) (list  (INT-CONST 1) (INT-CONST 2) (ADD)))
+(test (compile (deBruijn (parse '{{fun {x : Num} : Num {+ x 10}} {+ 2 3}})))
+      (list (INT-CONST 3) (INT-CONST 2) (ADD) (CLOSURE (list (INT-CONST 10) (ACCESS 0) (ADD) (RETURN))) (APPLY)))
 
+;; typed-compile
+(test (typed-compile '{+ 2 1})
+      (list  (INT-CONST 1) (INT-CONST 2) (ADD)))
+(test (typed-compile '{{fun {x : Num} : Num {+ x 10}} {+ 2 3}})
+      (list (INT-CONST 3) (INT-CONST 2) (ADD) (CLOSURE (list (INT-CONST 10) (ACCESS 0) (ADD) (RETURN))) (APPLY)))
+(test/exn (typed-compile 'x)
+          (
 
-;;typeof
+;; typeof
 (test (typeof (parse '{+ 1 3})) (TNum))
 
 (test (typeof (parse '3)) (TNum))
@@ -69,7 +86,48 @@
 (test/exn (typeof (parse '{fun {x : Num} : Num {fun {y : Num} {+ x y}}}))
           "Type error in expression fun position 1: expected Num found {Num -> Num}")
 
+;; typeof-env (cuando se testea typeof se esta testeando typeof-env tambien
+(test (typeof-env (parse '{+ 1 3}) empty-env) (TNum))
+(test (typeof-env (parse '3) empty-env) (TNum))
+(test (typeof-env (parse '{fun {x : Num} : Num {+ x y}}) (env-extend 'y (TNum) empty-env))
+      (TFun (TNum) (TNum)))
+(test (typeof-env (parse '{fun {x : {Num -> Num}} x}) empty-env)
+      (TFun (TFun (TNum) (TNum)) (TFun (TNum) (TNum))))
+(test (typeof-env (parse '{{fun {x : Num} : Num {+ x x}} {+ 5 3}}) empty-env)
+      (TNum))
+(test (typeof-env (parse '{with {x : Num 3} {+ x 5}}) empty-env)
+      (TNum))
 
-
-;typecheck
+;; typecheck
 (test (typecheck '3) 'Num)
+(test (typecheck  '{fun {f : Num} : Num 10})
+      '{Num -> Num})
+(test (typecheck '{fun {x : {Num -> Num}} x})
+      '{{Num -> Num} -> {Num -> Num}})
+(test (typecheck '{{fun {x : Num} : Num {+ x x}} {+ 5 3}})
+      'Num)
+(test (typecheck '{with {x : Num 3} {+ x 5}})
+      'Num)
+
+(test/exn (typecheck  '{+ 2 {fun {x : Num} : Num x}})
+          "Type error in expression + position 2: expected Num found {Num -> Num}")
+
+;; parse-msg
+(test (parse-msg (TNum))
+      'Num)
+(test (parse-msg (TFun (TFun (TNum) (TNum)) (TNum)))
+      '{{Num -> Num} -> Num})
+
+;; symbol-to-str
+(test (symbol-to-str 'Num)
+      "Num")
+(test (symbol-to-str '{Num -> Num})
+      "{Num -> Num}")
+
+;; env-lookup
+(test (env-lookup 'x (env-extend 'x (TNum) empty-env))
+      (TNum))
+(test/exn (env-lookup 'x (env-extend 'y (TNum) empty-env))
+          "Type error: No type for identifier x")
+(test/exn (env-lookup 'x empty-env)
+          "Type error: No type for identifier x")

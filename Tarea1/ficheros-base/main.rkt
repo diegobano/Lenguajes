@@ -49,9 +49,31 @@
     [(list 'with (list id : targ e1) e2) (app (parse (list 'fun (list id : targ) e2)) (parse e1))]
     [(list e1 e2) (app (parse e1) (parse e2))]))
 
-(define (deBruijn expr)#f)
+; deBruijn : Expr -> Expr
+; Recibe una expresion y retorna la expresion con indices de deBruijn
+; Utiliza la funcion deBruijn-env para calcular todo, entregandole un ambiente vacio
+(define (deBruijn expr)
+  (deBruijn-env expr empty-env))
 
-(define (compile expr) #f)
+; deBruijn-env : Expr Env -> Expr
+; Recibe una expresion y el ambiente en que esta definida y retorna la expresion con indices de deBruijn
+(define (deBruijn-env expr env)
+  (match expr
+    [(num n) (num n)]
+    [(id x) (acc (env-lookup-db x env 0))]
+    [(add l r) (add (deBruijn-env l env) (deBruijn-env r env))]
+    [(fun id targ body tbody) (fun-db (deBruijn-env body (env-extend id targ env)))]
+    [(app fun-id arg-expr) (app (deBruijn-env fun-id env) (deBruijn-env arg-expr env))]))
+    
+; compile : Expr -> list
+; Recibe una expresion con indices deBruijn y retorna una lista de instrucciones siguiendo el esquema de compilacion descrito
+(define (compile expr)
+  (match expr
+    [(num n) (list (INT-CONST n))]
+    [(acc n) (list (ACCESS n))]
+    [(add l r) (append (compile r) (compile l) (list (ADD)))]
+    [(fun-db body) (list (CLOSURE (append (compile body)(list (RETURN)))))]
+    [(app fun-id arg-expr) (append (compile arg-expr) (compile fun-id) (list (APPLY)))]))
 
 ; typeof : Expr -> Type
 ; Recibe una Expr y retorna sus tipos en formato Type
@@ -107,8 +129,14 @@
     [(? symbol?) (symbol->string msg)]
     [(list arg '-> ret) (string-append "{" (symbol-to-str arg) " -> " (symbol-to-str ret) "}")]))
 
-
-(define (typed-compile s-expr) #f)
+; typed-compile : <s-expr> -> list
+; 
+(define (typed-compile s-expr)
+  (let* ((expr (parse s-expr))
+        (expr-type (typecheck s-expr))
+        (expr-db (deBruijn expr)))
+    (compile expr-db)))
+    
 
 #|-----------------------------
 Environment abstract data type
@@ -136,8 +164,17 @@ representation BNF:
 ; env-lookup : id Env -> Type
 (define (env-lookup x env)
   (match env 
-    [(mtEnv) (error 'env-lookup "Type error: No type for identifier ~a" x)]
+    [(mtEnv) (error "Type error: No type for identifier" x)]
     [(aEnv id type rest)
      (if (equal? id x)
          type
          (env-lookup x rest))]))
+
+; env-lookup-db : id Env -> num
+(define (env-lookup-db x env pos)
+  (match env 
+    [(mtEnv) (error "Free identifier:" x)]
+    [(aEnv id type rest)
+     (if (equal? id x)
+         pos
+         (env-lookup-db x rest (+ 1 pos)))]))
