@@ -65,23 +65,23 @@
   (match expr
     [(num n) (TNum)]
     [(id x) (env-lookup x env)]
-    [(add l r) (if (not (equal? (TNum) (typeof l)))
+    [(add l r) (if (not (equal? (TNum) (typeof-env l env)))
                    (error (string-append "Type error in expression + position 1: expected Num found " (symbol-to-str (parse-msg (typeof l)))))
-                   (if (not (equal? (TNum) (typeof r)))
+                   (if (not (equal? (TNum) (typeof-env r env)))
                        (error (string-append "Type error in expression + position 2: expected Num found " (symbol-to-str (parse-msg (typeof r)))))
                        (TNum)))]
     [(fun id targ body tbody) (if (not tbody)
-                                  (TFun (TNum) (typeof-env body (env-extend id targ env)))
+                                  (TFun targ (typeof-env body (env-extend id targ env)))
                                   (let ((etype (typeof-env body (env-extend id targ env))))
                                     (if (equal? tbody etype)
-                                        (TFun (TNum) (TNum))
+                                        (TFun targ tbody)
                                         (let ((emsg1 (symbol-to-str (parse-msg etype))) (emsg2 (symbol-to-str (parse-msg tbody))))
                                           (error (string-append "Type error in expression fun position 1: expected " emsg2 " found " emsg1))))))]
                                   
     [(app fun-id arg-expr) (let ((fun-types (typeof-env fun-id env)))
-                             (if (equal? fun-types TNum)
+                             (if (equal? fun-types (TNum))
                                  (let ((emsg (symbol-to-str (parse-msg fun-types))))
-                                   (error (string-append "Type error in expression app position 1: expected {Num -> Num} found " emsg)))
+                                   (error (string-append "Type error in expression app position 1: expected T1 -> T2 found " emsg)))
                                  (let ((targ (typeof-env arg-expr env)))
                                    (if (not (equal? (TFun-arg fun-types) targ))
                                        (let ((emsg1 (symbol-to-str (parse-msg (TFun-arg fun-types)))) (emsg2 (symbol-to-str (parse-msg targ))))
@@ -94,15 +94,19 @@
   (parse-msg (typeof (parse s-expr))))
 
 ; parse-msg : Type -> <type>
+; Recibe un Type y retorna una lista de simbolos de la forma <type>
 (define (parse-msg type)
   (match type
     [(TNum) 'Num]
     [(TFun arg ret) (list (parse-msg arg) '-> (parse-msg ret))]))
 
+; symbol-to-str : <type> -> string
+; Recibe una lista de simbolos definidos por <type> y retorna su equivalente en un string imprimible
 (define (symbol-to-str msg)
   (match msg
     [(? symbol?) (symbol->string msg)]
     [(list arg '-> ret) (string-append "{" (symbol-to-str arg) " -> " (symbol-to-str ret) "}")]))
+
 
 (define (typed-compile s-expr) #f)
 
@@ -110,25 +114,30 @@
 Environment abstract data type
  
 empty-env  :: Env
-env-extend :: Sym Val Env -> Env
-env-lookup :: Sym Env -> Val
+env-extend :: Sym Type Env -> Env
+env-lookup :: Sym Env -> Type
  
 representation BNF:
 <env> ::= (mtEnv)
-        | (aEnv <id> <val> <env>)
+        | (aEnv <id> <type> <env>)
 |#
 (deftype Env
   (mtEnv)
   (aEnv id type env))
- 
+
+; empty-env : None -> Env
+; Retorna un ambiente vacio
 (def empty-env  (mtEnv))
- 
+
+; env-extend : Env -> Env
+; Funcion para extender un ambiente y retornar el ambiente extendido
 (def env-extend aEnv)
- 
+
+; env-lookup : id Env -> Type
 (define (env-lookup x env)
   (match env 
-    [(mtEnv) (error 'env-lookup "free identifier: ~a" x)]
-    [(aEnv id val rest)
+    [(mtEnv) (error 'env-lookup "Type error: No type for identifier ~a" x)]
+    [(aEnv id type rest)
      (if (equal? id x)
-         val
+         type
          (env-lookup x rest))]))
