@@ -47,18 +47,36 @@
        (fun-db (app (fun-db (add (acc 1) (acc 0))) (num 3)))
        (app (fun-db (add (acc 0) (acc 0))) (num 3))))
 
+
 ;; compile
 (test (compile (add (num 2) (num 1))) (list  (INT-CONST 1) (INT-CONST 2) (ADD)))
 (test (compile (deBruijn (parse '{{fun {x : Num} : Num {+ x 10}} {+ 2 3}})))
       (list (INT-CONST 3) (INT-CONST 2) (ADD) (CLOSURE (list (INT-CONST 10) (ACCESS 0) (ADD) (RETURN))) (APPLY)))
+
 
 ;; typed-compile
 (test (typed-compile '{+ 2 1})
       (list  (INT-CONST 1) (INT-CONST 2) (ADD)))
 (test (typed-compile '{{fun {x : Num} : Num {+ x 10}} {+ 2 3}})
       (list (INT-CONST 3) (INT-CONST 2) (ADD) (CLOSURE (list (INT-CONST 10) (ACCESS 0) (ADD) (RETURN))) (APPLY)))
+(test (typed-compile '{with {x : Num {{fun {y : Num} {+ y y}} 3}} {with {z : Num 3} {+ x z}}})
+      (list
+       (INT-CONST 3)
+       (CLOSURE (list (ACCESS 0) (ACCESS 0) (ADD) (RETURN)))
+       (APPLY)
+       (CLOSURE
+        (list
+         (INT-CONST 3)
+         (CLOSURE (list (ACCESS 0) (ACCESS 1) (ADD) (RETURN)))
+         (APPLY)
+         (RETURN)))
+       (APPLY)))
+
 (test/exn (typed-compile 'x)
-          (
+          "Free identifier: x")
+(test/exn (typed-compile '{fun {x : Num} : Num {fun {y : Num} {+ x y}}})
+          "Type error in expression fun position 1: expected Num found {Num -> Num}")
+
 
 ;; typeof
 (test (typeof (parse '{+ 1 3})) (TNum))
@@ -86,6 +104,7 @@
 (test/exn (typeof (parse '{fun {x : Num} : Num {fun {y : Num} {+ x y}}}))
           "Type error in expression fun position 1: expected Num found {Num -> Num}")
 
+
 ;; typeof-env (cuando se testea typeof se esta testeando typeof-env tambien
 (test (typeof-env (parse '{+ 1 3}) empty-env) (TNum))
 (test (typeof-env (parse '3) empty-env) (TNum))
@@ -112,17 +131,20 @@
 (test/exn (typecheck  '{+ 2 {fun {x : Num} : Num x}})
           "Type error in expression + position 2: expected Num found {Num -> Num}")
 
+
 ;; parse-msg
 (test (parse-msg (TNum))
       'Num)
 (test (parse-msg (TFun (TFun (TNum) (TNum)) (TNum)))
       '{{Num -> Num} -> Num})
 
+
 ;; symbol-to-str
 (test (symbol-to-str 'Num)
       "Num")
 (test (symbol-to-str '{Num -> Num})
       "{Num -> Num}")
+
 
 ;; env-lookup
 (test (env-lookup 'x (env-extend 'x (TNum) empty-env))

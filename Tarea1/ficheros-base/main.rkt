@@ -130,13 +130,12 @@
     [(list arg '-> ret) (string-append "{" (symbol-to-str arg) " -> " (symbol-to-str ret) "}")]))
 
 ; typed-compile : <s-expr> -> list
-; 
+; Recibe una lista con la forma descrita en <s-expr> y retorna una lista con instrucciones compiladas para la maquina
 (define (typed-compile s-expr)
   (let* ((expr (parse s-expr))
-        (expr-type (typecheck s-expr))
-        (expr-db (deBruijn expr)))
+         (expr-db (deBruijn expr))
+         (expr-type (typecheck s-expr)))
     (compile expr-db)))
-    
 
 #|-----------------------------
 Environment abstract data type
@@ -162,6 +161,7 @@ representation BNF:
 (def env-extend aEnv)
 
 ; env-lookup : id Env -> Type
+; Busca un id en el ambiente y retorna
 (define (env-lookup x env)
   (match env 
     [(mtEnv) (error "Type error: No type for identifier" x)]
