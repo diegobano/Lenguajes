@@ -80,6 +80,8 @@
      (lcal (map parse-def defs) (parse body))] 
     [(list 'match val-expr cases ...) ; note the elipsis to match n elements
      (mtch (parse val-expr) (map parse-case cases))] ; cases is a list
+    [(list 'list a b ...) (app (parse 'Cons) (map parse (list a (append (list 'list) b))))]
+    [(list 'list) (parse (list 'Empty))]
     [(list f args ...) ; same here
      (if (assq f *primitives*)
          (prim-app f (map parse args)) ; args is a list
@@ -108,7 +110,11 @@
     [(? number?)  (litP (num p))]
     [(? boolean?) (litP (bool p))]
     [(? string?)  (litP (str p))]
-    [(list ctr patterns ...) (constrP (first p) (map parse-pattern patterns))]))
+    [(list 'list) (constrP 'Empty '())]
+    [(list ctr patterns ...)
+     (if (equal? 'list (first p))
+         (constrP 'Cons (map parse-pattern (list (second p) (append (list 'list) (rest (rest p))))))
+         (constrP (first p) (map parse-pattern patterns)))]))
 
 ;; interp :: Expr Env -> number/procedure/Struct
 (define(interp expr env)
@@ -203,26 +209,38 @@
 
 ;; run :: s-expr -> number
 (define(run prog)
-  (def list-def '{local {{datatype List
-                                   {Emtpy}
-                                   {Cons a b}}
-                         {define length {fun {l}
-                                             {match l
-                                               {case {Empty} => {0}}
-                                               {case {Cons a b} => {+ 1 {length b}}}}}}}
-                   {List? Empty}})
-  (def parsed-list (parse list-def))
-  (pretty-printing (interp (parse prog) empty-env)))
+  (def list-def '{{datatype List
+                            {Empty}
+                            {Cons a b}}
+                  {define length {fun {l}
+                                      {match l
+                                        {case {Empty} => {0}}
+                                        {case {Cons a b} => {+ 1 {length b}}}}}}})
+  (def parsed-list (map parse-def list-def))
+  (def new-env (extend-env '() '() empty-env))
+  (for-each (λ (d) (interp-def d new-env)) parsed-list)
+  (pretty-printing (interp (parse prog) new-env)))
 
 ;; pretty-printing :: Struct -> string
 (define (pretty-printing expr)
   (match expr
     [(structV name variant values)
-     (if (empty? values)
-         (string-append "{" (symbol->string variant) "}")
-         (string-append "{" (symbol->string variant) " " (string-join (map pretty-printing values)) "}"))]
-    [(? number?) (number->string expr)]
-    [else (expr)]))
+     (cond
+       [(empty? values)
+         (list variant)]
+       [(equal? 'List name)
+         (append (list 'list) (map pretty-printing-list values))]
+       [else (append (list variant) (map pretty-printing values))])]
+    [else expr]))
+
+(define (pretty-printing-list struct)
+  (match struct
+    [(list a b) (append (pretty-printing a) (pretty-printing-list b))]
+    [(structV name variant values)
+     (if (equal? 'List name)
+         (map pretty-printing-list values)
+         (pretty-printing struct))]
+    [else struct]))
 
 
 #|-----------------------------

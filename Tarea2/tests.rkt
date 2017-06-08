@@ -78,6 +78,18 @@
                                           {case {Succ m} => m}}}}}
                 {Succ? {pred {Succ {Succ {Zero}}}}}}) #t)
 
+(test (parse '{match {list {+ 1 1} 4 6}
+                {case {Cons h r} => h}
+                {case _ => 0}}) (mtch (app (id 'Cons) (list (prim-app '+ (list (num 1) (num 1))) (app (id 'Cons) (list (num 4) (app (id 'Cons) (list (num 6) (app (id 'Empty) '()))))))) (list (cse (constrP 'Cons (list (idP 'h) (idP 'r))) (id 'h)) (cse (idP '_) (num 0))))
+)
+
+(test (parse '{match {list 2 {list 4 5} 6}
+{case {list a {list b c} d} => c}}) (mtch
+(app (id 'Cons) (list (num 2) (app (id 'Cons) (list (app (id 'Cons) (list (num 4) (app (id 'Cons) (list (num 5) (app (id 'Empty) '()))))) (app (id 'Cons) (list (num 6) (app (id 'Empty) '())))))))
+(list (cse (constrP 'Cons (list (idP 'a) (constrP 'Cons (list (constrP 'Cons (list (idP 'b) (constrP 'Cons (list (idP 'c) (constrP 'Empty '()))))) (constrP 'Cons (list (idP 'd) (constrP 'Empty '()))))))) (id 'c))))
+)
+
+
 ;tests for extended MiniScheme+ 
 #|
     (test (run '{local {{datatype Nat 
@@ -87,7 +99,7 @@
                                {match n
                                  {case {Zero} => {Zero}}
                                  {case {Succ m} => m}}}}}
-          {pred {Succ {Succ {Zero}}}}}) "{Succ {Zero}}")
+          {pred {Succ {Succ {Zero}}}}}) '{Succ {Zero}})
   
 (test (run
  `{local ,stream-lib
