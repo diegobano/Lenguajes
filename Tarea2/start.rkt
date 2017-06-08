@@ -65,6 +65,10 @@
   (litP l) ; valor literal 
   (constrP ctr patterns)) ; constructor y sub-patrones
 
+; evaluación lazy
+(deftype Lazy
+  (lazyE name expr))
+
 ;; parse :: s-expr -> Expr
 (define(parse s-expr)
   (match s-expr
@@ -229,18 +233,18 @@
        [(empty? values)
          (list variant)]
        [(equal? 'List name)
-         (append (list 'list) (map pretty-printing-list values))]
+         (append (list 'list) (pretty-printing-list values))]
        [else (append (list variant) (map pretty-printing values))])]
-    [else expr]))
+    [else (list expr)]))
 
 (define (pretty-printing-list struct)
   (match struct
     [(list a b) (append (pretty-printing a) (pretty-printing-list b))]
     [(structV name variant values)
      (if (equal? 'List name)
-         (map pretty-printing-list values)
+         (pretty-printing-list values)
          (pretty-printing struct))]
-    [else struct]))
+    [else (list struct)]))
 
 
 #|-----------------------------
