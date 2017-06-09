@@ -148,11 +148,8 @@
                                            [_ b])])) ids arg-vals) env)))]
     ; application
     [(app fun-expr arg-expr-list)
-     (match fun-expr
-       [(fun ids body) ((interp fun-expr env)
-                        (map (λ (a) (interp-lazy a env)) arg-expr-list))]
-       [_ ((interp fun-expr env)
-                        (map (λ (a) (interp a env)) arg-expr-list))])]
+     ((interp fun-expr env)
+      (map (λ (a) (interp-lazy a env)) arg-expr-list))]
     ; primitive application
     [(prim-app prim arg-expr-list)
      (apply (cadr (assq prim *primitives*))
@@ -167,7 +164,8 @@
      (def value-matched (interp expr env))
      (def (cons alist body) (find-first-matching-case value-matched cases))
      (interp body (extend-env (map car alist) (map cdr alist) env))]))
-  
+
+; interp-lazy :: Expr Env -> Lazy
 (define (interp-lazy expr env)
   (lazyE expr env))
 
@@ -185,16 +183,24 @@
 (define(interp-datatype name env)
   ; datatype predicate, eg. Nat?
   (update-env! (string->symbol (string-append (symbol->string name) "?"))
-               (λ (v) (symbol=? (structV-name (first v)) name))
+               (λ (v) (symbol=? (structV-name (interp (lazyE-expr (first v)) (lazyE-env (first v)))) name))
                env))
 
 ; interp-variant :: String String Env -> Void
-(define(interp-variant name var env)  
+(define (interp-variant name var env)
   ;; name of the variant or dataconstructor
-  (def varname (variant-name var))  
+  (def varname (variant-name var))
   ;; variant data constructor, eg. Zero, Succ
   (update-env! varname
-               (λ (args) (structV name varname args))
+               (λ (args)
+                 (structV name varname (map
+                                        (λ (id val)
+                                          (match id
+                                            [(list 'lazy s) val]
+                                            [_ (def (lazyE value nEnv) val)
+                                               (interp value nEnv)]))
+                                        (variant-params var)
+                                        args)))
                env)
   ;; variant predicate, eg. Zero?, Succ?
   (update-env! (string->symbol (string-append (symbol->string varname) "?"))
