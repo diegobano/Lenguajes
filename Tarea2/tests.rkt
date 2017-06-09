@@ -91,7 +91,7 @@
 
 
 ;tests for extended MiniScheme+ 
-#|
+
     (test (run '{local {{datatype Nat 
                   {Zero} 
                   {Succ n}}
@@ -100,7 +100,7 @@
                                  {case {Zero} => {Zero}}
                                  {case {Succ m} => m}}}}}
           {pred {Succ {Succ {Zero}}}}}) '{Succ {Zero}})
-  
+#|
 (test (run
  `{local ,stream-lib
           {local {,ones ,stream-take}

@@ -204,7 +204,7 @@
                env)
   ;; variant predicate, eg. Zero?, Succ?
   (update-env! (string->symbol (string-append (symbol->string varname) "?"))
-               (λ (v) (symbol=? (structV-variant (first v)) varname))
+               (λ (v) (symbol=? (structV-variant (interp (lazyE-expr (first v)) (lazyE-env (first v)))) varname))
                env))
 
 ;;;;
