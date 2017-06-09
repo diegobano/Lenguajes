@@ -67,7 +67,7 @@
 
 ; evaluación lazy
 (deftype Lazy
-  (lazyE name expr))
+  (lazyE expr env))
 
 ;; parse :: s-expr -> Expr
 (define(parse s-expr)
@@ -137,28 +137,42 @@
     ; function (notice the meta interpretation)
     [(fun ids body)
      (λ (arg-vals)
-       (interp body (extend-env ids arg-vals env)))]
+       (interp body (extend-env
+                     (map (λ (a) (match a
+                                      [(list 'lazy id) id]
+                                      [_ a])) ids)
+                     (map (λ (a b) (match a
+                                      [(list 'lazy id) b]
+                                      [_ (match b
+                                           [(lazyE exp nEnv) (interp exp nEnv)]
+                                           [_ b])])) ids arg-vals) env)))]
     ; application
     [(app fun-expr arg-expr-list)
-     ((interp fun-expr env)
-      (map (λ (a) (interp a env)) arg-expr-list))]
+     (match fun-expr
+       [(fun ids body) ((interp fun-expr env)
+                        (map (λ (a) (interp-lazy a env)) arg-expr-list))]
+       [_ ((interp fun-expr env)
+                        (map (λ (a) (interp a env)) arg-expr-list))])]
     ; primitive application
     [(prim-app prim arg-expr-list)
      (apply (cadr (assq prim *primitives*))
             (map (λ (a) (interp a env)) arg-expr-list))]
     ; local definitions
     [(lcal defs body)
-     (def new-env (extend-env '() '() env))            
-     (for-each (λ (d) (interp-def d new-env)) defs) 
+     (def new-env (extend-env '() '() env))
+     (for-each (λ (d) (interp-def d new-env)) defs)
      (interp body new-env)]
     ; pattern matching
     [(mtch expr cases)
      (def value-matched (interp expr env))
      (def (cons alist body) (find-first-matching-case value-matched cases))
      (interp body (extend-env (map car alist) (map cdr alist) env))]))
+  
+(define (interp-lazy expr env)
+  (lazyE expr env))
 
 ; interp-def :: Def Env -> Void
-(define(interp-def d env)
+(define (interp-def d env)
   (match d
     [(dfine id val-expr)
      (update-env! id (interp val-expr env) env)]
@@ -225,7 +239,7 @@
   (for-each (λ (d) (interp-def d new-env)) parsed-list)
   (pretty-printing (interp (parse prog) new-env)))
 
-;; pretty-printing :: Struct -> string
+;; pretty-printing :: Struct -> list/num/bool/str
 (define (pretty-printing expr)
   (match expr
     [(structV name variant values)
@@ -235,16 +249,17 @@
        [(equal? 'List name)
          (append (list 'list) (pretty-printing-list values))]
        [else (append (list variant) (map pretty-printing values))])]
-    [else (list expr)]))
+    [_ expr]))
 
+;; pretty-printing-list :: list/Struct -> list/num/bool/str
 (define (pretty-printing-list struct)
   (match struct
-    [(list a b) (append (pretty-printing a) (pretty-printing-list b))]
+    [(list a b) (append (list (pretty-printing a)) (pretty-printing-list b))]
     [(structV name variant values)
      (if (equal? 'List name)
          (pretty-printing-list values)
          (pretty-printing struct))]
-    [else (list struct)]))
+    [_ struct]))
 
 
 #|-----------------------------
@@ -266,7 +281,11 @@ update-env! :: Sym Val Env -> Void
     [(aEnv bindings rest)
      (def binding (assoc id bindings))
      (if binding
-         (cdr binding)
+         (match (cdr binding)
+           [(lazyE expr nEnv) (def val (interp expr nEnv))
+                              (update-env! id val env)
+                              val]
+           [_ (cdr binding)])
          (env-lookup id rest))]))
 
 (define (extend-env ids vals env)
