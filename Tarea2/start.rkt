@@ -231,15 +231,58 @@
                      #f)]
                 [(x y) (error "Match failure")]))
 
+; Definición de listas en MiniScheme+ con la función length
+(def list-def '{{datatype List
+                          {Empty}
+                          {Cons a b}}
+                {define length {fun {l}
+                                    {match l
+                                      {case {Empty} => {0}}
+                                      {case {Cons a b} => {+ 1 {length b}}}}}}})
+
+; Definición de Stream en MiniScheme+
+(def stream-data '{datatype Stream
+                            {Inf hd {lazy tl}}})
+
+; Definición de make-stream en MiniScheme+
+(def make-stream '{define make-stream {fun {hd {lazy tl}}
+                                    {Inf hd tl}}})
+
+; Definición de ones en MiniScheme+ para ocupar en ejemplos
+(def ones '{define ones {make-stream 1 ones}})
+
+; Definición de stream-hd en MiniScheme+
+(def stream-hd '{define stream-hd {fun (x)
+                                       (match x
+                                         {case {Inf hd tl} => hd})}})
+
+; Definición de stream-tl en MiniScheme+
+(def stream-tl '{define stream-tl {fun (x)
+                                       (match x
+                                         {case {Inf hd tl} => tl})}})
+
+; Definición de stream-take en MiniScheme+
+(def stream-take '{define stream-take {fun {n id}
+                                           {match n
+                                             {case 0 => {Empty}}
+                                             {case _ => {Cons {stream-hd id}
+                                                              {stream-take {- n 1} {stream-tl id}}}}}}})
+
+; Definición de la stream-lib
+(def stream-lib (list stream-data
+                      make-stream
+                      stream-hd
+                      stream-tl
+                      stream-take))
+
+; Definición de stream-zipWith
+(def stream-zipWith '{define stream-zipWith {fun {f id1 id2}
+                                                {Inf {f {stream-hd id1} {stream-hd id2}} {stream-zipWith f id1 id2}}}})
+
+
+
 ;; run :: s-expr -> number
 (define(run prog)
-  (def list-def '{{datatype List
-                            {Empty}
-                            {Cons a b}}
-                  {define length {fun {l}
-                                      {match l
-                                        {case {Empty} => {0}}
-                                        {case {Cons a b} => {+ 1 {length b}}}}}}})
   (def parsed-list (map parse-def list-def))
   (def new-env (extend-env '() '() empty-env))
   (for-each (λ (d) (interp-def d new-env)) parsed-list)
@@ -250,8 +293,6 @@
   (match expr
     [(structV name variant values)
      (cond
-       [(empty? values)
-         (list variant)]
        [(equal? 'List name)
          (append (list 'list) (pretty-printing-list values))]
        [else (append (list variant) (map pretty-printing values))])]
@@ -263,7 +304,9 @@
     [(list a b) (append (list (pretty-printing a)) (pretty-printing-list b))]
     [(structV name variant values)
      (if (equal? 'List name)
-         (pretty-printing-list values)
+         (if (equal? 'Empty variant)
+             values
+             (pretty-printing-list values))
          (pretty-printing struct))]
     [_ struct]))
 
@@ -287,6 +330,8 @@ update-env! :: Sym Val Env -> Void
     [(aEnv bindings rest)
      (def binding (assoc id bindings))
      (if binding
+         ; Se modifica el env-lookup para que,
+         ; si encuentra una evaluación lazy, que la evalúe y actualice el ambiente
          (match (cdr binding)
            [(lazyE expr nEnv) (def val (interp expr nEnv))
                               (update-env! id val env)
