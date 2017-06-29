@@ -277,9 +277,28 @@
 
 ; Definición de stream-zipWith
 (def stream-zipWith '{define stream-zipWith {fun {f id1 id2}
-                                                {Inf {f {stream-hd id1} {stream-hd id2}} {stream-zipWith f id1 id2}}}})
+                                                 {Inf {f
+                                                       {stream-hd id1}
+                                                       {stream-hd id2}}
+                                                      {stream-zipWith f {stream-tl id1} {stream-tl id2}}}}})
 
+; Definición de fibs
+(def fibs '{define fibs {make-stream 1
+                                     {make-stream 1 {stream-zipWith {fun {n m}
+                                                                         {+ n m}}
+                                                                    fibs
+                                                                    {stream-tl fibs}}}}})
 
+; Definición de merge-sort
+(def merge-sort '{define merge-sort {fun {id1 id2} {make-stream {if {> {stream-hd id1} {stream-hd id2}}
+                                                                    {stream-hd id2}
+                                                                    {stream-hd id1}}
+                                                                {merge-sort {if {> {stream-hd id1} {stream-hd id2}}
+                                                                                {stream-tl id2}
+                                                                                {stream-tl id1}}
+                                                                            {if {> {stream-hd id1} {stream-hd id2}}
+                                                                                {id1}
+                                                                                {id2}}}}}})
 
 ;; run :: s-expr -> number
 (define(run prog)
