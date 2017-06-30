@@ -11,6 +11,7 @@
          | {local {<def>*} <expr>}
 
 <def>  ::= {define <id> <expr>}
+         | {}
 
 
 |#
@@ -30,7 +31,8 @@
 (deftype Def
   (dfine name val-expr)
   (defclass id mets)
-  (definst class f exprs)) ; define
+  (definst class inst)
+  (instance f met expr)) ; define
 
 
 ;; parse :: s-expr -> Expr
@@ -52,9 +54,11 @@
 ; parse-def :: s-expr -> Def
 (define (parse-def s-expr)
   (match s-expr
+    ['() '()]
     [(list 'define id val-expr) (dfine id (parse val-expr))]
     [(list 'define-class class mets ...) (defclass class mets)]
-    [(list 'define-instance class f (list met expr) ...) (definst class f (met (parse expr)))]))
+    [(list 'define-instance class f defs ...) (definst class (instance (parse f) (parse-def defs)))]
+    [(list (list class expr) rest ...) (append (list (list class (parse expr))) (parse-def rest))]))
 
 ;; interp :: Expr Env -> number/procedure/Struct
 (define (interp expr env)
@@ -90,11 +94,43 @@
 (define (interp-def d env)
   (match d
     [(dfine id val-expr)
-     (update-env! id (interp val-expr env) env)]))
+     (update-env! id (interp val-expr env) env)]
+    [(defclass id mets)
+     (update-env! id (mets (map interp inst env)))]
+    [()
+     ()]))
 
 ;; run :: s-expr -> number
 (define (run prog)
   (interp (parse prog) empty-env))
+
+;; append-instance :: Def Def -> Def
+(define (append-instance cls n-inst)
+  (def (class mets inst) cls)
+  (class mets (append (list n-inst) inst)))
+
+;; get-instance :: Expr Expr Env -> Def
+(define (get-instance cname val env)
+  (def (class mets inst) (env-lookup cname env))
+  (find-instance inst val env))
+
+;; find-instance :: Def Expr -> Def
+(define (find-instance insts val env)
+  (match insts
+    ['() (error "Type error: No match found for value ~s" val)]
+    [else (def (instance f met expr) (first insts))
+          (if ((interp (app f val) env))
+              (first insts)
+              (find-instance (rest insts) val env))]))
+
+;; get-method :: Def Expr -> Expr
+(define (get-method inst name)
+  (match inst
+    ['() (error "Name error: No method found with name ~s" name)]
+    [(list (list id expr) rest ...)
+     (if (equal? id name)
+         expr
+         (get-method rest name))]))
 
 
 #|-----------------------------
