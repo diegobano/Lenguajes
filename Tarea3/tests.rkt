@@ -23,7 +23,7 @@
 
 #|
 tarea 3  tests
-
+|#
 (test (run '{local {{define x bool?}} 
            {x 1}}) #f)
 
@@ -86,7 +86,7 @@ tarea 3  tests
        (same? "hola" "hola")
        (greater? 10 2))))
 #t)
-
+#|
 (test 
 (run '(local ((define-class Server service1 service2)
 (define-instance Server (fun (x) #t)

@@ -35,7 +35,8 @@
 
 ; Clases
 (deftype Class
-  (class cname mets inst))
+  (class-id id)
+  (class cname mets inst deflt-env))
 
 ; Instancias
 (deftype Instance
@@ -64,7 +65,7 @@
     [(list 'define id val-expr) (dfine id (parse val-expr))]
     [(list 'define-class class mets ...) (defclass class mets)]
     [(list 'define-instance class f defs ...) (definst class (parse f) (parse-def defs))]
-    [(list (list met expr) rest ...) (append (list (list met (parse expr))) (parse-def rest))]))
+    [(list (list met expr) rest ...) (append (list (list (parse met) (parse expr))) (parse-def rest))]))
 
 ;; interp :: Expr Env -> number/procedure/Struct
 (define (interp expr env)
@@ -89,7 +90,8 @@
      (def interp-args (map (λ (a) (interp a env)) arg-expr-list))
      (def interp-fun (interp fun-expr env))
      (match interp-fun
-       [(class cname mets insts) (get-method (get-instance cname interp-args env) (cdr fun-expr))]
+       [(class-id cname) (def (id met) fun-expr)
+                         ((get-method (get-instance cname interp-args env) met) interp-args)]
        [else (interp-fun interp-args)])]
     ;primitive
     [(prim p) p]
@@ -105,15 +107,30 @@
     [(dfine id val-expr)
      (update-env! id (interp val-expr env) env)]
     [(defclass id mets)
-     (update-env! id (class id mets empty-env) env)]
+     (def parsed-mets (map parse mets))
+     (def defaults (foldl (λ (inst n-env)
+                            (extend-env (list (car inst)) (list (interp (cadr inst) env)) n-env))
+                          empty-env
+                          mets)
+       (foldl (λ (d) (interp (filter (λ (d) (not (id? d))) parsed-mets) env))
+     (def only-ids (map (λ (d) (match d
+                                 [(id name) d]
+                                 [(dfine name expr) (id name)]))
+                        parsed-mets))
+     (update-env! (class-id id) (class id only-ids '() defaults) env)
+     (for-each (λ (d)
+                 (def (id name) d)
+                 (update-env! name (class-id id) env))
+               only-ids)]
     [(definst name f mets)
-     (update-env! name
-                  (append-instance (env-lookup name envz
-                                   (instance f
+     (update-env! (class-id name)
+                  (append-instance (env-lookup (class-id name) env)
+                                   (instance (interp f env)
                                              (foldl (λ (inst n-env)
-                                                      (extend-env (car inst) (interp (cadr inst) env) n-env))
-                                                    mets
-                                                    empty-env))))]))
+                                                      (extend-env (list (car inst)) (list (interp (cadr inst) env)) n-env))
+                                                    empty-env
+                                                    mets)))
+                  env)]))
 
 ;; run :: s-expr -> number
 (define (run prog)
@@ -121,27 +138,27 @@
 
 ;; append-instance :: Class Instance -> Instance
 (define (append-instance cls n-inst)
-  (def (class cname mets inst) cls)
-  (class cname mets (append (list n-inst) inst)))
+  (def (class cname mets inst defaults) cls)
+  (class cname mets (append (list n-inst) inst defaults)))
 
 ;; get-instance :: Expr Expr Env -> Instance
 (define (get-instance cname val env)
-  (def (class name mets inst) (env-lookup cname env))
+  (def (class name mets inst defaults) (env-lookup (class-id cname) env))
   (find-instance inst val env))
 
 ;; find-instance :: Def Expr -> Def
 (define (find-instance insts val env)
   (match insts
-    ['() (error "Type error: No match found for value ~s" val)]
-    [else (def (instance f met-env) (first insts))
-          (if (interp (app f val) env)
-              (first insts)
-              (find-instance (rest insts) val env))]))
+    ['() (error "No instance found for value ~a" val)]
+    [(list (instance f met-env) rest ...)
+     (if (andmap (λ (d) (f (list d))) val)
+         (first insts)
+         (find-instance rest val env))]))
 
 ;; get-method :: Def Expr -> Expr
 (define (get-method inst name)
   (def (instance f met-env) inst)
-  (env-lookup name met-env))
+  (env-lookup (id name) met-env))
 
 
 #|-----------------------------
@@ -164,11 +181,7 @@ update-env! :: Sym Val Env -> Void
      (def binding (assoc id bindings))
      (if binding
          (cdr binding)
-         (match (cdr bindings)
-            [(class cname mets insts) (if (assoc id mets)
-                                          (cdr bindings)
-                                          (env-lookup id rest))]
-            [else (env-lookup id rest)]))]))
+         (env-lookup id rest))]))
 
 (define (extend-env ids vals env)
   (aEnv (map cons ids vals) ; zip to get list of pairs (id . val)
